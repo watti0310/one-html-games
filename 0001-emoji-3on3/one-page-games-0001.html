@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>絵文字モンスターバトル</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: radial-gradient(ellipse at top, #2a2550 0%, #14122b 60%, #0a0918 100%);
+    color: #f0eaff; font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+    overflow: hidden; touch-action: manipulation;
+  }
+  #app { position: relative; width: 100%; height: 100vh; height: 100dvh; overflow: hidden; }
+  .screen {
+    position: absolute; inset: 0; display: none; flex-direction: column;
+    padding: env(safe-area-inset-top,10px) 12px calc(env(safe-area-inset-bottom,10px) + 10px);
+    overflow-y: auto;
+  }
+  .screen.active { display: flex; animation: fadeIn .35s ease; }
+  @keyframes fadeIn { from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:translateY(0);} }
+
+  h1,h2,h3 { margin: 6px 0; }
+  .title-main {
+    text-align:center; margin-top: 8vh;
+  }
+  .title-emoji { font-size: 68px; filter: drop-shadow(0 0 18px #8a6bff); animation: floaty 3s ease-in-out infinite; }
+  @keyframes floaty { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-10px);} }
+  .title-main h1 { font-size: 26px; letter-spacing: 2px; background: linear-gradient(90deg,#ffd166,#ff6b6b,#4dabf7,#51cf66); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .title-sub { color:#b7aee0; font-size:13px; margin-bottom: 30px; }
+
+  .btn {
+    display:block; width:100%; padding: 14px; margin: 8px 0; border:none; border-radius: 14px;
+    font-size: 16px; font-weight: 700; color:#fff; background: linear-gradient(135deg,#6c5ce7,#a29bfe);
+    box-shadow: 0 4px 0 #4834b8, 0 6px 14px rgba(0,0,0,.4); active-state: none; letter-spacing:1px;
+    -webkit-appearance:none;
+  }
+  .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #4834b8; }
+  .btn.secondary { background: linear-gradient(135deg,#3a3560,#2a2550); box-shadow: 0 4px 0 #1c1940, 0 6px 14px rgba(0,0,0,.4); }
+  .btn.small { padding:10px; font-size:13px; width:auto; display:inline-block; }
+  .btn:disabled { opacity:.35; box-shadow:none; }
+
+  .tip-box { margin-top:auto; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); border-radius:12px; padding:10px 12px; font-size:12px; color:#cfc7ee; line-height:1.5; }
+
+  .topbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .topbar .back { font-size:22px; background:none; border:none; color:#cfc7ee; padding:4px 8px; }
+
+  .level-grid { display:flex; flex-direction:column; gap:10px; margin-top: 10px; }
+  .level-card { border-radius:16px; padding:16px; text-align:center; font-weight:800; font-size:18px; border: 2px solid transparent; }
+  .level-card.easy { background: linear-gradient(135deg,#2d5a3d,#1c3d29); color:#9df0b8; }
+  .level-card.normal { background: linear-gradient(135deg,#5a4a1f,#3d3213); color:#f0d99d; }
+  .level-card.hard { background: linear-gradient(135deg,#5a1f2d,#3d131c); color:#f09da9; }
+  .level-card small { display:block; font-weight:400; font-size:11px; opacity:.8; margin-top:4px; }
+
+  .cpu-list { display:flex; flex-direction:column; gap:10px; }
+  .cpu-card { background: rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.12); border-radius:14px; padding:12px; display:flex; align-items:center; gap:10px; }
+  .cpu-card .icons { font-size:26px; letter-spacing:-2px; }
+  .cpu-card .info { flex:1; }
+  .cpu-card .info .nm { font-weight:700; font-size:14px; }
+  .cpu-card .info .rk { font-size:11px; color:#b7aee0; }
+
+  .mon-summary { display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,.06); border-radius:12px; padding:8px 12px; margin-bottom:8px; font-size:13px; }
+  .mon-grid { display:grid; grid-template-columns: repeat(3,1fr); gap:8px; padding-bottom:80px; }
+  .mon-card { position:relative; background: rgba(255,255,255,.05); border:2px solid rgba(255,255,255,.1); border-radius:12px; padding:8px 4px; text-align:center; }
+  .mon-card.selected { border-color:#ffd166; background: rgba(255,209,102,.12); }
+  .mon-card .ic { font-size:30px; }
+  .mon-card .nm { font-size:10.5px; font-weight:700; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .mon-card .rk { font-size:9px; color:#ffd166; }
+  .mon-card .st { font-size:8.5px; color:#b7aee0; margin-top:2px; line-height:1.3; }
+  .mon-card .el { position:absolute; top:2px; right:4px; font-size:11px; }
+
+  .fixed-bottom { position:fixed; left:0; right:0; bottom:0; padding: 10px 14px calc(env(safe-area-inset-bottom,10px) + 10px); background: linear-gradient(0deg, #0a0918 60%, transparent); z-index:20; }
+
+  /* battle screen */
+  .battle-wrap { display:flex; flex-direction:column; height:100%; }
+  .team-row { display:flex; gap:6px; justify-content:center; }
+  .unit-card { flex:1; max-width:120px; background: rgba(255,255,255,.06); border:2px solid rgba(255,255,255,.12); border-radius:12px; padding:6px 4px; text-align:center; position:relative; transition: opacity .3s, transform .3s; }
+  .unit-card.fainted { opacity:.25; filter: grayscale(1); }
+  .unit-card.active-turn { border-color:#ffd166; box-shadow:0 0 10px #ffd16688; }
+  .unit-card.targetable { border-color:#4dabf7; animation: pulse 1s infinite; cursor:pointer; }
+  @keyframes pulse { 0%,100%{box-shadow:0 0 0 #4dabf7;} 50%{box-shadow:0 0 12px #4dabf7;} }
+  .unit-card .ic { font-size:28px; display:block; }
+  .unit-card .nm { font-size:10px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hpbar-bg { height:7px; background:#2a2440; border-radius:5px; margin-top:3px; overflow:hidden; }
+  .hpbar { height:100%; border-radius:5px; transition: width .5s ease; background: linear-gradient(90deg,#51cf66,#8ee69b); }
+  .hpbar.mid { background: linear-gradient(90deg,#ffd166,#f5b942); }
+  .hpbar.low { background: linear-gradient(90deg,#ff6b6b,#ff4d4d); }
+  .hp-text { font-size:8px; color:#cfc7ee; margin-top:1px; }
+  .status-icons { position:absolute; top:-8px; left:2px; font-size:10px; }
+
+  @keyframes shake { 10%,90%{transform:translateX(-2px);} 20%,80%{transform:translateX(4px);} 30%,50%,70%{transform:translateX(-8px);} 40%,60%{transform:translateX(8px);} }
+  .shake { animation: shake .5s; }
+  @keyframes flashDmg { 0%,100%{ filter:none; } 30%{ filter: brightness(2) drop-shadow(0 0 8px #ff4d4d); } }
+  .flash-dmg { animation: flashDmg .45s; }
+  @keyframes flashHeal { 0%,100%{ filter:none; } 30%{ filter: brightness(1.8) drop-shadow(0 0 8px #51cf66); } }
+  .flash-heal { animation: flashHeal .5s; }
+  @keyframes popText { 0%{ transform: translate(-50%,0) scale(.5); opacity:0; } 20%{ transform: translate(-50%,-10px) scale(1.2); opacity:1;} 100%{ transform: translate(-50%,-40px) scale(1); opacity:0; } }
+  .float-txt { position:absolute; left:50%; top:0; font-weight:900; font-size:14px; color:#fff; text-shadow:0 0 4px #000; animation: popText 1s ease-out forwards; pointer-events:none; z-index:30; }
+  .float-txt.heal { color:#8ee69b; }
+  .float-txt.miss { color:#aaa; }
+
+  .vs-row { text-align:center; font-size:11px; color:#8a80b8; margin:6px 0; }
+  .target-banner { display:flex; align-items:center; justify-content:center; gap:6px; background: rgba(77,171,247,.15); border:1px solid #4dabf7; border-radius:10px; padding:8px 10px; font-size:12px; margin:6px 0; color:#cfe8ff; }
+
+  .log-panel { flex:1; margin:8px 0; background: rgba(0,0,0,.3); border-radius:10px; padding:8px 10px; font-size:11.5px; overflow-y:auto; min-height:60px; line-height:1.6; }
+  .log-panel div { border-bottom:1px solid rgba(255,255,255,.05); padding:2px 0; }
+
+  .action-bar { display:flex; gap:8px; }
+
+  .sheet { position:fixed; left:0; right:0; bottom:0; background: linear-gradient(180deg,#241f45,#150f2e); border-radius:18px 18px 0 0; box-shadow: 0 -6px 20px rgba(0,0,0,.5); transform: translateY(105%); transition: transform .32s ease; z-index:50; max-height:70vh; display:flex; flex-direction:column; }
+  .sheet.open { transform: translateY(0); }
+  .sheet-handle { width:40px; height:4px; background:#555; border-radius:3px; margin:8px auto; }
+  .sheet-title { text-align:center; font-size:13px; color:#cfc7ee; margin-bottom:6px; }
+  .sheet-body { overflow-y:auto; padding: 0 10px 14px; }
+  .move-grid { display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
+  .move-btn { background: rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.15); border-radius:10px; padding:8px 6px; text-align:left; color:#f0eaff; }
+  .move-btn .mt { font-size:12px; font-weight:700; }
+  .move-btn .ms { font-size:9.5px; color:#b7aee0; margin-top:2px; }
+  .move-btn.type-attack { border-left: 4px solid #ff6b6b; }
+  .move-btn.type-support { border-left: 4px solid #4dabf7; }
+  .overlay-dim { position:fixed; inset:0; background: rgba(0,0,0,.5); z-index:40; opacity:0; pointer-events:none; transition:opacity .3s; }
+  .overlay-dim.show { opacity:1; pointer-events:auto; }
+
+  .result-wrap { text-align:center; padding-top: 6vh; }
+  .rank-letter { font-size: 90px; font-weight:900; text-shadow: 0 0 24px currentColor; }
+  .rank-S{color:#ffd166;} .rank-A{color:#4dabf7;} .rank-B{color:#51cf66;} .rank-C{color:#cfc7ee;} .rank-LOSE{color:#ff6b6b;}
+  .stat-line { display:flex; justify-content:space-between; background:rgba(255,255,255,.05); border-radius:10px; padding:10px 16px; margin:6px 0; font-size:14px; }
+
+  .badge { display:inline-block; font-size:10px; padding:2px 7px; border-radius:8px; background:#3a3560; color:#cfc7ee; margin-left:4px;}
+  ::-webkit-scrollbar{ width:0; height:0; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="overlay-dim" id="overlayDim"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============ データ定義 ============ */
+const ELEMENTS = {
+  fire:  { jp:'炎', icon:'🔥', prefix:'ファイア' },
+  water: { jp:'水', icon:'💧', prefix:'アクア' },
+  grass: { jp:'草', icon:'🌿', prefix:'リーフ' }
+};
+const BEATS = { fire:'grass', grass:'water', water:'fire' };
+const TIER_NAME = { 50:'ショット', 100:'ストライク', 150:'カノン' };
+const ARCH_LABEL = { atk:'攻撃特化', def:'防御特化', hp:'体力特化', spd:'素早特化', balance:'バランス' };
+const ARCHETYPES = ['atk','def','hp','spd','balance'];
+
+const RANK_ICONS = [
+  ['🦂','🐌','🦫','🪰','🦝'],
+  ['🤺','🪲','🐄','🐈','💩'],
+  ['🦏','🐢','🐳','🦜','👽'],
+  ['🦣','🐚','🧌','🧚','👹'],
+  ['🐉','🧞','🐦\u200d🔥','🦸','🫈']
+];
+const RANK_NAMES = [
+  ['サソリング','カタツムール','ビーバード','ハエトリオ','タヌキッツ'],
+  ['フェンサー','カブトーン','モーモウル','キャットレオ','ウンチキング'],
+  ['サイガード','カメゴンタ','クジラーナ','オウムット','エイリアーノ'],
+  ['マンモンス','シェルドラ','トロールガ','フェアリオン','オニマスク'],
+  ['ドラゴニクス','ジニーロード','フェニックア','ヒーロンガ','バブルシス']
+];
+
+/* --- 技プール生成 --- */
+const MOVES = [];
+Object.keys(ELEMENTS).forEach(el=>{
+  ['single','all'].forEach(range=>{
+    [50,100,150].forEach(power=>{
+      MOVES.push({
+        id: 'atk_'+el+'_'+range+'_'+power,
+        type:'attack', element:el, range, power,
+        name: ELEMENTS[el].prefix + TIER_NAME[power] + (range==='all'?'(全体)':''),
+        icon: ELEMENTS[el].icon,
+        acc: range==='single'?0.9:0.7
+      });
+    });
+  });
+});
+const SUPPORT_EFFECTS = [
+  { key:'cut100', label:'完全防御', mult:0, kind:'cut', icon:'🛡️' },
+  { key:'cut50',  label:'半減防御', mult:0.5, kind:'cut', icon:'🛡️' },
+  { key:'boost150', label:'火力強化', mult:1.5, kind:'boost', icon:'⬆️' },
+  { key:'debuff075', label:'火力減退', mult:0.75, kind:'debuff', icon:'⬇️' }
+];
+Object.keys(ELEMENTS).forEach(el=>{
+  SUPPORT_EFFECTS.forEach(eff=>{
+    ['single','all'].forEach(range=>{
+      MOVES.push({
+        id: 'sup_'+eff.key+'_'+el+'_'+range,
+        type:'support', kind:eff.kind, effect:eff.key, element:el, range, mult:eff.mult,
+        name: ELEMENTS[el].jp+'属性'+eff.label+(range==='all'?'(全体)':''),
+        icon: eff.icon, duration:2
+      });
+    });
+  });
+});
+MOVES.push({ id:'sup_heal50_single', type:'support', kind:'heal', range:'single', name:'応急回復', icon:'💚', healPct:0.5 });
+const MOVE_MAP = {}; MOVES.forEach(m=>MOVE_MAP[m.id]=m);
+function findAtk(el,range,power){ return MOVE_MAP['atk_'+el+'_'+range+'_'+power]; }
+function findSup(key,el,range){ return MOVE_MAP['sup_'+key+'_'+el+'_'+range]; }
+
+/* --- ステータス生成 --- */
+function clampRound(v,min,max,step){ v = Math.round(v/step)*step; return Math.max(min, Math.min(max, v)); }
+function genStats(rankIdx, archIdx){
+  const baseHP  = [1000,1400,1800,2200,2600][rankIdx];
+  const baseStat= [70,100,130,160,190][rankIdx];
+  let hp=baseHP, atk=baseStat, def=baseStat, spd=baseStat;
+  switch(ARCHETYPES[archIdx]){
+    case 'atk': hp-=200; atk+=50; def-=20; spd-=10; break;
+    case 'def': atk-=20; def+=50; spd-=20; break;
+    case 'hp':  hp+=400; atk-=15; def-=15; spd-=15; break;
+    case 'spd': hp-=150; atk-=10; def-=25; spd+=50; break;
+    case 'balance': atk+=10; def+=10; spd+=10; break;
+  }
+  return {
+    hp: clampRound(hp,1000,3000,100),
+    atk: clampRound(atk,50,200,10),
+    def: clampRound(def,50,200,10),
+    spd: clampRound(spd,50,200,10)
+  };
+}
+
+function powersForRank(rank){
+  if(rank===1) return [50];
+  if(rank===2) return [50,100];
+  if(rank===3) return [50,100,150];
+  return [100,150];
+}
+function pickAttackMoves(el, rank){
+  const powers = powersForRank(rank);
+  let combos = [];
+  powers.forEach(p=>{ combos.push(findAtk(el,'single',p)); combos.push(findAtk(el,'all',p)); });
+  if(combos.length>4){
+    const idxs = [0,1,combos.length-2,combos.length-1];
+    combos = idxs.map(i=>combos[i]);
+  }
+  const others = Object.keys(ELEMENTS).filter(e=>e!==el);
+  let i=0;
+  while(combos.length<4){ combos.push(findAtk(others[i%others.length],'single',50)); i++; }
+  return combos;
+}
+function pickSupportMoves(el){
+  return [
+    findSup('cut100', el, 'single'),
+    findSup('boost150', el, 'single'),
+    findSup('debuff075', el, 'single'),
+    MOVE_MAP['sup_heal50_single']
+  ];
+}
+
+/* --- モンスターテンプレート生成 --- */
+const TEMPLATES = [];
+for(let r=0;r<5;r++){
+  for(let a=0;a<5;a++){
+    const stats = genStats(r,a);
+    const element = ['fire','water','grass'][(r*5+a)%3];
+    const moves = [...pickAttackMoves(element, r+1), ...pickSupportMoves(element)];
+    TEMPLATES.push({
+      id: r*5+a, rank:r+1, archetype:ARCHETYPES[a], icon:RANK_ICONS[r][a], name:RANK_NAMES[r][a],
+      element, maxHp:stats.hp, atk:stats.atk, def:stats.def, spd:stats.spd, moves
+    });
+  }
+}
+function T(id){ return TEMPLATES[id]; }
+
+/* --- CPUロースター --- */
+const CPU_ROSTERS = [
+  { level:'easy', name:'サソリ三銃士', ids:[0,1,2] },
+  { level:'easy', name:'のんびり動物隊', ids:[2,3,4] },
+  { level:'easy', name:'フェンサーと仲間', ids:[5,1,3] },
+  { level:'easy', name:'モーモウル軍団', ids:[7,0,4] },
+  { level:'easy', name:'フェンサー同盟', ids:[5,9,2] },
+  { level:'normal', name:'サイガード隊', ids:[10,6,8] },
+  { level:'normal', name:'クジラとエイリアン', ids:[12,14,0] },
+  { level:'normal', name:'フェンサー連合', ids:[5,6,7] },
+  { level:'normal', name:'カメと素早い仲間', ids:[11,8,9] },
+  { level:'normal', name:'オウムとエイリアン隊', ids:[13,14,2] },
+  { level:'hard', name:'マンモス強襲隊', ids:[15,11,7] },
+  { level:'hard', name:'ドラゴン使い', ids:[20,12,4] },
+  { level:'hard', name:'トロールとフェアリー', ids:[17,18,0] },
+  { level:'hard', name:'バブル最終決戦隊', ids:[24,10,1] },
+  { level:'hard', name:'オニ軍団', ids:[19,15,2] }
+];
+
+const LEVEL_LABEL = { easy:'かんたん', normal:'ふつう', hard:'むずかしい' };
+
+const TIPS = [
+  '💡 属性は炎→草→水→炎の3すくみ。有利属性は2倍ダメージ！',
+  '💡 全体攻撃は命中率が低め。単体攻撃は確実に狙おう。',
+  '💡 補助技で防御を固めてから反撃するのも戦略のひとつ。',
+  '💡 素早さが高いモンスターは先に技を出せる。',
+  '💡 選出モンスターのランク合計は9以下に抑えよう。',
+  '💡 回復技はピンチのモンスターを救う切り札になる。'
+];
+
+/* ============ ゲーム状態 ============ */
+const state = {
+  screen:'title',
+  selectedLevel:null,
+  selectedCpu:null,
+  selectedMonsterIds:[],
+  playerTeam:[], enemyTeam:[],
+  turnCount:0,
+  stats:{ dealt:0, taken:0, koCount:0 },
+  totalAllyMaxHp:0,
+  playerActions:[],
+  currentActorIndex:0,
+  pendingMove:null,
+  win:false
+};
+
+function createInstance(tmplId){
+  const t = T(tmplId);
+  return {
+    tmplId, name:t.name, icon:t.icon, rank:t.rank, element:t.element,
+    maxHp:t.maxHp, hp:t.maxHp, atk:t.atk, def:t.def, spd:t.spd,
+    moves:t.moves, fainted:false,
+    status:{ boost:null, debuff:null, cut:null }
+  };
+}
+
+function sleep(ms){ return new Promise(res=>setTimeout(res,ms)); }
+function rnd(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+function elementMultiplier(atkEl, defEl){
+  if(atkEl===defEl) return 1;
+  if(BEATS[atkEl]===defEl) return 2;
+  if(BEATS[defEl]===atkEl) return 0.5;
+  return 1;
+}
+
+/* ============ 描画共通 ============ */
+const app = document.getElementById('app');
+const overlayDim = document.getElementById('overlayDim');
+
+function render(){
+  let html = '';
+  if(state.screen==='title') html = renderTitle();
+  else if(state.screen==='level') html = renderLevel();
+  else if(state.screen==='cpuList') html = renderCpuList();
+  else if(state.screen==='monsterSelect') html = renderMonsterSelect();
+  else if(state.screen==='battle') html = renderBattle();
+  else if(state.screen==='result') html = renderResult();
+  app.innerHTML = '<div class="screen active">'+html+'</div>';
+}
+
+function renderTitle(){
+  const tip = rnd(TIPS);
+  return `
+    <div class="title-main">
+      <div class="title-emoji">🦂🐉🐢</div>
+      <h1>絵文字モンスターバトル</h1>
+      <div class="title-sub">技を選んで戦う 3on3 コマンドバトル</div>
+    </div>
+    <div style="margin-top:20px;">
+      <button class="btn" data-action="goLevel">▶ たたかいに出る</button>
+      <button class="btn secondary" data-action="showHelp">📖 遊び方</button>
+    </div>
+    <div class="tip-box" id="tipBox">${tip}</div>
+  `;
+}
+
+function renderLevel(){
+  return `
+    <div class="topbar"><button class="back" data-action="goTitle">←</button><h2>難易度を選択</h2><span></span></div>
+    <div class="level-grid">
+      <div class="level-card easy" data-action="goCpuList" data-level="easy">かんたん<small>低ランクのモンスターが相手</small></div>
+      <div class="level-card normal" data-action="goCpuList" data-level="normal">ふつう<small>そこそこ手強い相手</small></div>
+      <div class="level-card hard" data-action="goCpuList" data-level="hard">むずかしい<small>高ランクの猛者たち</small></div>
+    </div>
+    <div class="tip-box">💡 まずは「かんたん」で操作に慣れよう！</div>
+  `;
+}
+
+function renderCpuList(){
+  const list = CPU_ROSTERS.filter(c=>c.level===state.selectedLevel);
+  const cards = list.map((c,i)=>{
+    const icons = c.ids.map(id=>T(id).icon).join('');
+    const rankSum = c.ids.reduce((s,id)=>s+T(id).rank,0);
+    return `<div class="cpu-card" data-action="pickCpu" data-idx="${i}">
+      <div class="icons">${icons}</div>
+      <div class="info"><div class="nm">${c.name}</div><div class="rk">Lv:${LEVEL_LABEL[c.level]} / ランク合計${rankSum}</div></div>
+      <div>▶</div>
+    </div>`;
+  }).join('');
+  return `
+    <div class="topbar"><button class="back" data-action="goLevel">←</button><h2>対戦相手を選択</h2><span></span></div>
+    <div class="cpu-list">${cards}</div>
+  `;
+}
+
+function renderMonsterSelect(){
+  const sel = state.selectedMonsterIds;
+  const rankSum = sel.reduce((s,id)=>s+T(id).rank,0);
+  const cards = TEMPLATES.map(t=>{
+    const isSel = sel.includes(t.id);
+    return `<div class="mon-card ${isSel?'selected':''}" data-action="toggleMon" data-id="${t.id}">
+      <div class="el">${ELEMENTS[t.element].icon}</div>
+      <div class="ic">${t.icon}</div>
+      <div class="nm">${t.name}</div>
+      <div class="rk">Rk${t.rank} ${ARCH_LABEL[t.archetype]}</div>
+      <div class="st">HP${t.maxHp} 攻${t.atk} 防${t.def} 速${t.spd}</div>
+    </div>`;
+  }).join('');
+  const canConfirm = sel.length===3 && rankSum<=9;
+  return `
+    <div class="topbar"><button class="back" data-action="goCpuList" data-level="${state.selectedLevel}">←</button><h2>モンスターを3体選択</h2><span></span></div>
+    <div class="mon-summary"><span>選択中: ${sel.length}/3体</span><span>ランク合計: ${rankSum} / 9</span></div>
+    <div class="mon-grid">${cards}</div>
+    <div class="fixed-bottom">
+      <button class="btn" data-action="confirmMonsters" ${canConfirm?'':'disabled'}>この編成で出撃 ▶</button>
+    </div>
+  `;
+}
+
+function hpBarClass(m){
+  const pct = m.hp/m.maxHp;
+  if(pct<=0.25) return 'low'; if(pct<=0.55) return 'mid'; return '';
+}
+function statusIcons(m){
+  let s='';
+  if(m.status.boost) s+='⬆️'; if(m.status.debuff) s+='⬇️'; if(m.status.cut) s+='🛡️';
+  return s;
+}
+function isTargetable(side, idx){
+  if(!state.pendingMove) return false;
+  const { mv } = state.pendingMove;
+  const targetSide = (mv.type==='attack' || mv.kind==='debuff') ? 'enemy' : 'player';
+  if(targetSide !== side) return false;
+  const unit = getUnit(side, idx);
+  return unit && !unit.fainted;
+}
+function unitCardHtml(m, side, idx){
+  const pct = Math.max(0, Math.round(m.hp/m.maxHp*100));
+  const targetable = isTargetable(side, idx) ? 'targetable' : '';
+  return `<div class="unit-card ${m.fainted?'fainted':''} ${targetable}" id="unit-${side}-${idx}" data-side="${side}" data-idx="${idx}">
+    <div class="status-icons">${statusIcons(m)}</div>
+    <span class="ic">${m.icon}</span>
+    <div class="nm">${m.name}</div>
+    <div class="hpbar-bg"><div class="hpbar ${hpBarClass(m)}" style="width:${pct}%"></div></div>
+    <div class="hp-text">${Math.max(0,m.hp)}/${m.maxHp}</div>
+  </div>`;
+}
+
+function renderBattle(){
+  const enemyCards = state.enemyTeam.map((m,i)=>unitCardHtml(m,'enemy',i)).join('');
+  const playerCards = state.playerTeam.map((m,i)=>unitCardHtml(m,'player',i)).join('');
+  const allDecided = getUndecidedActorIndex()===-1;
+  const targetBanner = state.pendingMove ? `
+    <div class="target-banner">🎯 対象のモンスターをタップして選択
+      <button class="btn small secondary" data-action="cancelTarget" style="margin-left:8px;">キャンセル</button>
+    </div>` : '';
+  return `
+    <div class="battle-wrap">
+      <div class="topbar"><span style="font-size:12px;color:#b7aee0;">ターン ${state.turnCount+1}</span><span style="font-size:12px;color:#b7aee0;">vs ${state.selectedCpu.name}</span></div>
+      <div class="team-row">${enemyCards}</div>
+      <div class="vs-row">⚔ VS ⚔</div>
+      <div class="team-row">${playerCards}</div>
+      ${targetBanner}
+      <div class="log-panel" id="logPanel">${state.logHtml||'<div>戦闘開始！技を選んでターンを実行しよう。</div>'}</div>
+      <div class="action-bar">
+        <button class="btn" data-action="openMoveSheet" ${(state.turnBusy||state.pendingMove)?'disabled':''}>${allDecided?'✅ コマンド確認':'⚔ コマンド選択'}</button>
+        <button class="btn secondary" data-action="executeTurn" ${(!allDecided||state.turnBusy||state.pendingMove)?'disabled':''}>▶ ターン実行</button>
+      </div>
+    </div>
+    <div class="sheet" id="sheet"></div>
+  `;
+}
+
+function renderResult(){
+  const win = state.win;
+  const rank = win ? computeRank() : null;
+  const dmgPct = Math.round(state.stats.taken/state.totalAllyMaxHp*100);
+  return `
+    <div class="result-wrap">
+      <h2>${win?'🎉 勝利！':'💀 敗北…'}</h2>
+      <div class="rank-letter rank-${win?rank:'LOSE'}">${win?rank:'—'}</div>
+      <div style="margin-top:14px;">
+        <div class="stat-line"><span>経過ターン数</span><span>${state.turnCount}</span></div>
+        <div class="stat-line"><span>与ダメージ合計</span><span>${state.stats.dealt}</span></div>
+        <div class="stat-line"><span>被ダメージ合計</span><span>${state.stats.taken} (${dmgPct}%)</span></div>
+        <div class="stat-line"><span>戦闘不能数</span><span>${state.stats.koCount}/3</span></div>
+      </div>
+      <button class="btn" style="margin-top:20px;" data-action="goCpuList" data-level="${state.selectedLevel}">🔁 相手を選び直す</button>
+      <button class="btn secondary" data-action="goTitle">🏠 タイトルへ戻る</button>
+    </div>
+  `;
+}
+
+/* ============ 遷移アクション ============ */
+function goTitle(){ state.screen='title'; render(); }
+function goLevel(){ state.screen='level'; render(); }
+function goCpuList(level){ state.selectedLevel = level; state.screen='cpuList'; render(); }
+function pickCpu(idx){
+  const list = CPU_ROSTERS.filter(c=>c.level===state.selectedLevel);
+  state.selectedCpu = list[idx];
+  state.selectedMonsterIds = [];
+  state.screen='monsterSelect'; render();
+}
+function toggleMon(id){
+  const sel = state.selectedMonsterIds;
+  const i = sel.indexOf(id);
+  if(i>=0){ sel.splice(i,1); }
+  else { if(sel.length>=3) return; sel.push(id); }
+  render();
+}
+function confirmMonsters(){
+  state.playerTeam = state.selectedMonsterIds.map(createInstance);
+  state.enemyTeam = state.selectedCpu.ids.map(createInstance);
+  state.totalAllyMaxHp = state.playerTeam.reduce((s,m)=>s+m.maxHp,0);
+  state.turnCount = 0;
+  state.stats = { dealt:0, taken:0, koCount:0 };
+  state.playerActions = [];
+  state.logHtml = '';
+  state.win=false;
+  state.turnBusy=false;
+  state.screen='battle';
+  render();
+}
+
+/* ============ バトルロジック ============ */
+function getUndecidedActorIndex(){
+  for(let i=0;i<state.playerTeam.length;i++){
+    const m = state.playerTeam[i];
+    if(m.fainted) continue;
+    const has = state.playerActions.some(a=>a.actorSide==='player' && a.actorIdx===i);
+    if(!has) return i;
+  }
+  return -1;
+}
+
+function openMoveSheet(){
+  const idx = getUndecidedActorIndex();
+  if(idx===-1){ return; }
+  showMoveList(idx);
+}
+
+function showMoveList(actorIdx){
+  const m = state.playerTeam[actorIdx];
+  overlayDim.classList.add('show');
+  const sheet = document.getElementById('sheet');
+  const moveButtons = m.moves.map((mv,mi)=>{
+    let desc = '';
+    if(mv.type==='attack') desc = `${ELEMENTS[mv.element].jp}属性 / 威力${mv.power} / ${mv.range==='all'?'全体':'単体'} / 命中${Math.round(mv.acc*100)}%`;
+    else if(mv.kind==='heal') desc = '味方1体のHPを50%回復';
+    else desc = `${mv.range==='all'?'全体指定':'単体指定'} / ${mv.kind==='cut'?(mv.mult===0?'完全カット':'ダメージ半減'):mv.kind==='boost'?'威力1.5倍':'相手威力0.75倍'}`;
+    return `<button class="move-btn type-${mv.type}" data-action="selectMove" data-actor="${actorIdx}" data-move="${mi}">
+      <div class="mt">${mv.icon} ${mv.name}</div>
+      <div class="ms">${desc}</div>
+    </button>`;
+  }).join('');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">${m.icon} ${m.name} の技を選択</div>
+    <div class="sheet-body"><div class="move-grid">${moveButtons}</div>
+    <button class="btn secondary" style="margin-top:10px;" data-action="closeSheet">閉じる</button></div>
+  `;
+  requestAnimationFrame(()=>sheet.classList.add('open'));
+}
+
+function closeSheet(){
+  const sheet = document.getElementById('sheet');
+  if(sheet){ sheet.classList.remove('open'); }
+  overlayDim.classList.remove('show');
+}
+
+function selectMove(actorIdx, moveIdx){
+  const m = state.playerTeam[actorIdx];
+  const mv = m.moves[moveIdx];
+  const needsSingleTarget =
+    (mv.type==='attack' && mv.range==='single') ||
+    (mv.type==='support' && mv.kind==='debuff' && mv.range==='single') ||
+    (mv.type==='support' && (mv.kind==='heal' || mv.kind==='cut' || mv.kind==='boost') && mv.range==='single');
+
+  if(!needsSingleTarget){
+    // 全体 or 自動対象
+    let targets;
+    if(mv.type==='attack') targets = state.enemyTeam.filter(e=>!e.fainted).map((e,i)=>state.enemyTeam.indexOf(e));
+    else if(mv.kind==='debuff') targets = state.enemyTeam.map((e,i)=>i).filter(i=>!state.enemyTeam[i].fainted);
+    else targets = state.playerTeam.map((e,i)=>i).filter(i=>!state.playerTeam[i].fainted);
+    const targetSide = (mv.type==='attack' || mv.kind==='debuff') ? 'enemy' : 'player';
+    commitAction(actorIdx, mv, targetSide, targets);
+    closeSheet();
+    render();
+    return;
+  }
+
+  // 単体指定：対象選択モードへ（カードのハイライトはrenderBattle内で判定）
+  state.pendingMove = { actorIdx, mv };
+  closeSheet();
+  render();
+}
+
+function cancelTarget(){
+  state.pendingMove = null;
+  render();
+}
+
+function selectTarget(side, idx){
+  if(!state.pendingMove) return;
+  const { actorIdx, mv } = state.pendingMove;
+  const team = side==='enemy'?state.enemyTeam:state.playerTeam;
+  if(team[idx].fainted) return;
+  commitAction(actorIdx, mv, side, [idx]);
+  state.pendingMove = null;
+  render();
+}
+
+function commitAction(actorIdx, mv, targetSide, targetIdxs){
+  state.playerActions.push({ actorSide:'player', actorIdx, move:mv, targetSide, targetIdxs });
+}
+
+/* --- CPU AI --- */
+function estimateDamage(atkUnit, defUnit, mv){
+  const mult = elementMultiplier(mv.element, defUnit.element);
+  return mv.power * (atkUnit.atk/defUnit.def) * 3 * mult;
+}
+function bestSingleTargetIdx(team, element){
+  let best=-1, bestScore=-Infinity;
+  team.forEach((u,i)=>{
+    if(u.fainted) return;
+    const mult = elementMultiplier(element, u.element);
+    const score = mult*1000 - u.hp;
+    if(score>bestScore){ bestScore=score; best=i; }
+  });
+  return best;
+}
+function lowestHpPctIdx(team){
+  let best=-1, bestPct=Infinity;
+  team.forEach((u,i)=>{
+    if(u.fainted) return;
+    const pct = u.hp/u.maxHp;
+    if(pct<bestPct){ bestPct=pct; best=i; }
+  });
+  return best;
+}
+function scoreMove(mv, unit, allyTeam, enemyTeam){
+  const enemyAliveCount = enemyTeam.filter(u=>!u.fainted).length;
+  if(enemyAliveCount===0) return -1;
+  if(mv.type==='attack'){
+    let idxs = mv.range==='all' ? enemyTeam.map((u,i)=>i).filter(i=>!enemyTeam[i].fainted) : [bestSingleTargetIdx(enemyTeam, mv.element)];
+    let total=0;
+    idxs.forEach(i=>{
+      const dmg = estimateDamage(unit, enemyTeam[i], mv);
+      total += dmg;
+      if(dmg>=enemyTeam[i].hp) total += 300;
+    });
+    return total;
+  }
+  if(mv.kind==='heal'){
+    const li = lowestHpPctIdx(allyTeam);
+    if(li===-1) return 0;
+    const u = allyTeam[li];
+    return (u.hp/u.maxHp)<0.5 ? (u.maxHp-u.hp)*0.6 : 5;
+  }
+  if(mv.kind==='boost') return 120;
+  if(mv.kind==='cut') return 90;
+  if(mv.kind==='debuff') return 90;
+  return 0;
+}
+function cpuChooseTargets(mv, unit, allyTeam, enemyTeam){
+  if(mv.type==='attack'){
+    if(mv.range==='all') return enemyTeam.map((u,i)=>i).filter(i=>!enemyTeam[i].fainted);
+    return [bestSingleTargetIdx(enemyTeam, mv.element)];
+  }
+  if(mv.kind==='heal'){ const i=lowestHpPctIdx(allyTeam); return [i===-1?0:i]; }
+  if(mv.kind==='debuff'){
+    return mv.range==='all' ? enemyTeam.map((u,i)=>i).filter(i=>!enemyTeam[i].fainted) : [bestSingleTargetIdx(enemyTeam, mv.element)];
+  }
+  // cut/boost -> ally
+  if(mv.range==='all') return allyTeam.map((u,i)=>i).filter(i=>!allyTeam[i].fainted);
+  const i = lowestHpPctIdx(allyTeam);
+  return [i===-1?0:i];
+}
+function cpuDecideActions(){
+  const level = state.selectedCpu.level;
+  const actions = [];
+  state.enemyTeam.forEach((unit, idx)=>{
+    if(unit.fainted) return;
+    let mv;
+    if(level==='easy'){
+      mv = rnd(unit.moves);
+    } else {
+      const scored = unit.moves.map(m=>({ m, s:scoreMove(m, unit, state.enemyTeam, state.playerTeam) }));
+      scored.sort((a,b)=>b.s-a.s);
+      const poolSize = level==='hard' ? 1 : 3;
+      const pool = scored.slice(0, Math.min(poolSize, scored.length));
+      mv = rnd(pool).m;
+    }
+    const targetSide = (mv.type==='attack' || mv.kind==='debuff') ? 'player' : 'enemy';
+    const targetTeam = targetSide==='player' ? state.playerTeam : state.enemyTeam;
+    const allyTeam = targetSide==='player' ? state.enemyTeam : state.playerTeam;
+    const targets = cpuChooseTargets(mv, unit, allyTeam, targetTeam);
+    actions.push({ actorSide:'enemy', actorIdx:idx, move:mv, targetSide, targetIdxs:targets });
+  });
+  return actions;
+}
+
+/* --- ターン実行 --- */
+function appendLog(text){
+  state.logHtml = (state.logHtml||'') + `<div>${text}</div>`;
+  const panel = document.getElementById('logPanel');
+  if(panel){ panel.innerHTML = state.logHtml; panel.scrollTop = panel.scrollHeight; }
+}
+
+function getUnit(side, idx){ return side==='player' ? state.playerTeam[idx] : state.enemyTeam[idx]; }
+
+async function animateUnit(side, idx, cls){
+  const el = document.getElementById('unit-'+side+'-'+idx);
+  if(!el) return;
+  el.classList.add(cls);
+  await sleep(500);
+  el.classList.remove(cls);
+}
+function floatText(side, idx, text, cls){
+  const el = document.getElementById('unit-'+side+'-'+idx);
+  if(!el) return;
+  const f = document.createElement('div');
+  f.className = 'float-txt '+(cls||'');
+  f.textContent = text;
+  el.style.position = 'relative';
+  el.appendChild(f);
+  setTimeout(()=>f.remove(), 1000);
+}
+function updateUnitDom(side, idx){
+  const el = document.getElementById('unit-'+side+'-'+idx);
+  if(!el) return;
+  const u = getUnit(side, idx);
+  const pct = Math.max(0, Math.round(u.hp/u.maxHp*100));
+  el.querySelector('.hpbar').style.width = pct+'%';
+  el.querySelector('.hpbar').className = 'hpbar '+hpBarClass(u);
+  el.querySelector('.hp-text').textContent = `${Math.max(0,u.hp)}/${u.maxHp}`;
+  el.querySelector('.status-icons').textContent = statusIcons(u);
+  if(u.fainted) el.classList.add('fainted');
+}
+
+function computeDamage(attacker, defender, mv){
+  const base = mv.power * (attacker.atk/defender.def) * 3;
+  let mult = elementMultiplier(mv.element, defender.element);
+  const variance = 0.9 + Math.random()*0.2;
+  let dmg = base * mult * variance;
+  if(attacker.status.boost && attacker.status.boost.element===mv.element) dmg *= attacker.status.boost.mult;
+  if(attacker.status.debuff && attacker.status.debuff.element===mv.element) dmg *= attacker.status.debuff.mult;
+  if(defender.status.cut && defender.status.cut.element===mv.element) dmg *= defender.status.cut.mult;
+  return Math.max(1, Math.round(dmg));
+}
+
+async function executeAction(act){
+  const attacker = getUnit(act.actorSide, act.actorIdx);
+  if(attacker.fainted) return;
+  const mv = act.move;
+  if(mv.type==='attack'){
+    for(const tIdx of act.targetIdxs){
+      const defender = getUnit(act.targetSide, tIdx);
+      if(defender.fainted) continue;
+      const hit = Math.random() < mv.acc;
+      appendLog(`${attacker.icon}${attacker.name} の${mv.name}！`);
+      await sleep(300);
+      if(!hit){
+        floatText(act.targetSide, tIdx, 'MISS', 'miss');
+        appendLog(`→ 外れた…`);
+        await sleep(350);
+        continue;
+      }
+      const dmg = computeDamage(attacker, defender, mv);
+      defender.hp = Math.max(0, defender.hp - dmg);
+      if(act.actorSide==='player') state.stats.dealt += dmg; else state.stats.taken += dmg;
+      floatText(act.targetSide, tIdx, '-'+dmg);
+      updateUnitDom(act.targetSide, tIdx);
+      await animateUnit(act.targetSide, tIdx, 'shake');
+      await animateUnit(act.targetSide, tIdx, 'flash-dmg');
+      const mult = elementMultiplier(mv.element, defender.element);
+      const effTxt = mult>1?'（効果ばつぐん！）':mult<1?'（効果いまひとつ…）':'';
+      appendLog(`→ ${defender.name} に ${dmg} ダメージ！ ${effTxt}`);
+      if(defender.hp<=0 && !defender.fainted){
+        defender.fainted = true;
+        if(act.targetSide==='player') state.stats.koCount++;
+        appendLog(`💥 ${defender.icon}${defender.name} は戦闘不能になった！`);
+      }
+      await sleep(250);
+    }
+  } else {
+    appendLog(`${attacker.icon}${attacker.name} の${mv.name}！`);
+    await sleep(300);
+    if(mv.kind==='heal'){
+      for(const tIdx of act.targetIdxs){
+        const t = getUnit(act.targetSide, tIdx);
+        if(t.fainted) continue;
+        const amt = Math.round(t.maxHp*mv.healPct);
+        t.hp = Math.min(t.maxHp, t.hp+amt);
+        floatText(act.targetSide, tIdx, '+'+amt, 'heal');
+        updateUnitDom(act.targetSide, tIdx);
+        await animateUnit(act.targetSide, tIdx, 'flash-heal');
+        appendLog(`→ ${t.name} のHPが ${amt} 回復！`);
+      }
+    } else {
+      for(const tIdx of act.targetIdxs){
+        const t = getUnit(act.targetSide, tIdx);
+        if(t.fainted) continue;
+        t.status[mv.kind] = { element:mv.element, mult:mv.mult, turnsLeft:mv.duration };
+        updateUnitDom(act.targetSide, tIdx);
+        await animateUnit(act.targetSide, tIdx, 'flash-heal');
+        appendLog(`→ ${t.name} に効果が発動！`);
+      }
+    }
+    await sleep(250);
+  }
+}
+
+function checkBattleEnd(){
+  return state.playerTeam.every(m=>m.fainted) || state.enemyTeam.every(m=>m.fainted);
+}
+
+function computeRank(){
+  const dmgPct = state.stats.taken/state.totalAllyMaxHp*100;
+  const ko = state.stats.koCount;
+  const t = state.turnCount;
+  if(ko===0 && t<=6 && dmgPct<30) return 'S';
+  if(ko<=1 && t<=10 && dmgPct<55) return 'A';
+  if(ko<=2 && t<=15) return 'B';
+  return 'C';
+}
+
+async function executeTurn(){
+  if(getUndecidedActorIndex()!==-1) return;
+  state.turnBusy = true;
+  render();
+  const cpuActions = cpuDecideActions();
+  const allActions = [...state.playerActions, ...cpuActions];
+  allActions.sort((a,b)=>{
+    const ua = getUnit(a.actorSide,a.actorIdx), ub = getUnit(b.actorSide,b.actorIdx);
+    return (ub.spd - ua.spd) || (Math.random()-0.5);
+  });
+  for(const act of allActions){
+    const actor = getUnit(act.actorSide, act.actorIdx);
+    if(actor.fainted) continue;
+    await executeAction(act);
+    if(checkBattleEnd()) break;
+  }
+  [...state.playerTeam, ...state.enemyTeam].forEach(u=>{
+    ['boost','debuff','cut'].forEach(k=>{
+      if(u.status[k]){ u.status[k].turnsLeft--; if(u.status[k].turnsLeft<=0) u.status[k]=null; }
+    });
+  });
+  state.turnCount++;
+  state.playerActions = [];
+  state.turnBusy = false;
+  if(checkBattleEnd()){
+    state.win = !state.playerTeam.every(m=>m.fainted) && state.enemyTeam.every(m=>m.fainted);
+    await sleep(600);
+    state.screen='result';
+    render();
+  } else {
+    render();
+  }
+}
+
+function showHelp(){
+  alert('【遊び方】\n・3体の絵文字モンスターを選んで(ランク合計9以下)CPUと対戦！\n・攻撃技/補助技を選んで技を選択し、ターンを実行しよう。\n・炎→草→水→炎の3すくみで有利属性は2倍ダメージ。\n・全滅させれば勝利！被ダメージが少ないほど高ランク評価。');
+}
+
+/* ============ イベント委譲 ============ */
+app.addEventListener('click', (e)=>{
+  const el = e.target.closest('[data-action]');
+  if(!el) return;
+  const action = el.dataset.action;
+  if(action==='goTitle') goTitle();
+  else if(action==='goLevel') goLevel();
+  else if(action==='goCpuList') goCpuList(el.dataset.level);
+  else if(action==='pickCpu') pickCpu(parseInt(el.dataset.idx));
+  else if(action==='toggleMon') toggleMon(parseInt(el.dataset.id));
+  else if(action==='confirmMonsters') confirmMonsters();
+  else if(action==='openMoveSheet') openMoveSheet();
+  else if(action==='closeSheet') closeSheet();
+  else if(action==='selectMove') selectMove(parseInt(el.dataset.actor), parseInt(el.dataset.move));
+  else if(action==='cancelTarget') cancelTarget();
+  else if(action==='executeTurn') executeTurn();
+  else if(action==='showHelp') showHelp();
+});
+overlayDim.addEventListener('click', ()=>{ closeSheet(); });
+app.addEventListener('click', (e)=>{
+  const el = e.target.closest('.unit-card.targetable');
+  if(!el) return;
+  selectTarget(el.dataset.side, parseInt(el.dataset.idx));
+});
+
+/* ============ 初期描画 ============ */
+render();
+})();
+</script>
+</body>
+</html>
